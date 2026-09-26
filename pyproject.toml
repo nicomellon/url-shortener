@@ -1,0 +1,103 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "my-project"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+authors = [
+  {name = "Your Name", email = "you@example.com"},
+]
+dependencies = [
+  "fastapi[standard]",
+  "psycopg[binary]",
+  "pydantic-settings",
+  "sqlalchemy>=2.0",
+  "uvicorn",
+]
+
+[project.scripts]
+my-project-api = "my_project.entrypoints.fastapi_app:main"
+my-project-admin = "my_project.entrypoints.admin:main"
+
+[dependency-groups]
+dev = [
+  "import-linter",
+  "mypy",
+  "pytest",
+  "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short"
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",  # pycodestyle
+  "F",       # pyflakes
+  "I",       # isort
+  "B",       # flake8-bugbear
+  "UP",      # pyupgrade
+  "SIM",     # flake8-simplify
+]
+
+[tool.mypy]
+files = ["src", "tests"]
+plugins = ["pydantic.mypy"]
+check_untyped_defs = true
+warn_unused_ignores = true
+
+[tool.importlinter]
+root_package = "my_project"
+include_external_packages = true
+
+# The app's top level: entrypoints wire contexts together through bootstrap.
+# Contexts sit side by side, separated by "|", which also forbids them from
+# importing each other: they only share code through my_project.shared.
+[[tool.importlinter.contracts]]
+name = "Top-level layers only depend downwards, contexts are independent"
+type = "layers"
+layers = [
+  "my_project.entrypoints",
+  "my_project.bootstrap",
+  "my_project.example",  # add new contexts here: "my_project.example | my_project.billing"
+  "my_project.shared",
+]
+
+# The dependency rule inside every bounded context.
+[[tool.importlinter.contracts]]
+name = "Layers inside each context only depend downwards"
+type = "layers"
+containers = ["my_project.*"]
+exhaustive = false
+layers = [
+  "(entrypoints)",
+  "(views) | (service_layer)",
+  "(adapters)",
+  "(domain)",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain models are pure Python"
+type = "forbidden"
+source_modules = ["my_project.*.domain", "my_project.shared.domain"]
+forbidden_modules = [
+  "sqlalchemy",
+  "fastapi",
+  "pydantic",
+  "pydantic_settings",
+  "my_project.config",
+]

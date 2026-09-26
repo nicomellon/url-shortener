@@ -1,0 +1,25 @@
+# Local backing services, matching production (https://12factor.net/dev-prod-parity)
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: my_project
+      POSTGRES_PASSWORD: my_project
+      POSTGRES_DB: my_project
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U my_project"]
+      interval: 2s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://my_project:my_project@db:5432/my_project
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
