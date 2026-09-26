@@ -1,5 +1,5 @@
-from my_project.example.domain import events
-from my_project.example.domain.model import Thing
+from url_shortener.example.domain import events
+from url_shortener.example.domain.model import Thing
 
 
 def test_creating_a_thing_records_an_event():

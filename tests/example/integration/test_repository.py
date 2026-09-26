@@ -1,7 +1,7 @@
 import pytest
 
-from my_project.example.domain.model import Thing
-from my_project.example.service_layer.unit_of_work import SqlAlchemyUnitOfWork
+from url_shortener.example.domain.model import Thing
+from url_shortener.example.service_layer.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = pytest.mark.usefixtures("mappers")
 

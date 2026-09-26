@@ -25,4 +25,4 @@ USER app
 EXPOSE 8000
 
 # Exec form so the process receives SIGTERM and shuts down gracefully
-CMD ["my-project-api"]
+CMD ["url-shortener-api"]

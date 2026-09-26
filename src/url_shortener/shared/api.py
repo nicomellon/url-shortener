@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from my_project.shared.messagebus import MessageBus
+from url_shortener.shared.messagebus import MessageBus
 
 
 def get_bus(request: Request) -> MessageBus:

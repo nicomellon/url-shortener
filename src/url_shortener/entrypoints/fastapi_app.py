@@ -5,9 +5,9 @@ import uvicorn
 from fastapi import FastAPI
 from sqlalchemy.orm import clear_mappers
 
-from my_project import bootstrap, config
-from my_project.example.entrypoints import api as example_api
-from my_project.shared import orm
+from url_shortener import bootstrap, config
+from url_shortener.example.entrypoints import api as example_api
+from url_shortener.shared import orm
 
 
 @asynccontextmanager

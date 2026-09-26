@@ -3,20 +3,20 @@ services:
   db:
     image: postgres:17
     environment:
-      POSTGRES_USER: my_project
-      POSTGRES_PASSWORD: my_project
-      POSTGRES_DB: my_project
+      POSTGRES_USER: url_shortener
+      POSTGRES_PASSWORD: url_shortener
+      POSTGRES_DB: url_shortener
     ports:
       - "${DB_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U my_project"]
+      test: ["CMD-SHELL", "pg_isready -U url_shortener"]
       interval: 2s
       retries: 10
 
   api:
     build: .
     environment:
-      DATABASE_URL: postgresql+psycopg://my_project:my_project@db:5432/my_project
+      DATABASE_URL: postgresql+psycopg://url_shortener:url_shortener@db:5432/url_shortener
       PORT: 8000
     ports:
       - "8000:8000"

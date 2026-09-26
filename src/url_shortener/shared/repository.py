@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from my_project.shared.domain import Aggregate
+from url_shortener.shared.domain import Aggregate
 
 
 class AbstractRepository[T: Aggregate](abc.ABC):

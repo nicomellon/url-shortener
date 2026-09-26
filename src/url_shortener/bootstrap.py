@@ -11,11 +11,11 @@ from collections.abc import Callable
 from sqlalchemy import Engine
 from sqlalchemy.orm import sessionmaker
 
-from my_project.example.adapters import orm as example_orm
-from my_project.example.service_layer import handlers as example_handlers
-from my_project.example.service_layer import unit_of_work as example_unit_of_work
-from my_project.shared import messagebus, orm
-from my_project.shared.domain import Command, Event
+from url_shortener.example.adapters import orm as example_orm
+from url_shortener.example.service_layer import handlers as example_handlers
+from url_shortener.example.service_layer import unit_of_work as example_unit_of_work
+from url_shortener.shared import messagebus, orm
+from url_shortener.shared.domain import Command, Event
 
 
 def bootstrap(

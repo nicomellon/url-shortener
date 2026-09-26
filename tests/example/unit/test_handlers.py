@@ -2,9 +2,9 @@ import logging
 
 import pytest
 
-from my_project import bootstrap
-from my_project.example.domain import commands, model
-from my_project.example.service_layer import handlers, unit_of_work
+from url_shortener import bootstrap
+from url_shortener.example.domain import commands, model
+from url_shortener.example.service_layer import handlers, unit_of_work
 
 from ...fakes import FakeRepository
 

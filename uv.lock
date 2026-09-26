@@ -728,7 +728,7 @@ wheels = [
 ]
 
 [[package]]
-name = "my-project"
+name = "url-shortener"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

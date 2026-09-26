@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from my_project.shared.domain import Aggregate, Command, Event
-from my_project.shared.messagebus import MessageBus
-from my_project.shared.unit_of_work import AbstractUnitOfWork
+from url_shortener.shared.domain import Aggregate, Command, Event
+from url_shortener.shared.messagebus import MessageBus
+from url_shortener.shared.unit_of_work import AbstractUnitOfWork
 
 from ..fakes import FakeRepository
 from ..random_refs import random_ref

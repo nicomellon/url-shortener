@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from my_project.example import views
-from my_project.example.domain import commands
-from my_project.example.service_layer import handlers
-from my_project.shared.api import Bus, DbSession
+from url_shortener.example import views
+from url_shortener.example.domain import commands
+from url_shortener.example.service_layer import handlers
+from url_shortener.shared.api import Bus, DbSession
 
 router = APIRouter(prefix="/things", tags=["things"])
 

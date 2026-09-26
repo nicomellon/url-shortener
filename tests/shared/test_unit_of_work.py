@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import text
 
-from my_project.shared.unit_of_work import SqlAlchemyUnitOfWork
+from url_shortener.shared.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.fixture

@@ -1,8 +1,8 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import registry, sessionmaker
 
-from my_project import config
-from my_project.shared.domain import Aggregate
+from url_shortener import config
+from url_shortener.shared.domain import Aggregate
 
 # One registry for all contexts, so table names must be unique across contexts
 mapper_registry = registry()

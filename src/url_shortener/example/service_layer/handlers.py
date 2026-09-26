@@ -4,8 +4,8 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from my_project.example.domain import commands, events, model
-from my_project.shared.domain import Command, Event
+from url_shortener.example.domain import commands, events, model
+from url_shortener.shared.domain import Command, Event
 
 if TYPE_CHECKING:
     from . import unit_of_work

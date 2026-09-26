@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "my-project"
+name = "url-shortener"
 version = "0.1.0"
 description = ""
 readme = "README.md"
@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
 authors = [
-  {name = "Your Name", email = "you@example.com"},
+  {name = "Nico Mellon", email = "nmellon94@gmail.com"},
 ]
 dependencies = [
   "fastapi[standard]",
@@ -22,8 +22,8 @@ dependencies = [
 ]
 
 [project.scripts]
-my-project-api = "my_project.entrypoints.fastapi_app:main"
-my-project-admin = "my_project.entrypoints.admin:main"
+url-shortener-api = "url_shortener.entrypoints.fastapi_app:main"
+url-shortener-admin = "url_shortener.entrypoints.admin:main"
 
 [dependency-groups]
 dev = [
@@ -61,27 +61,27 @@ check_untyped_defs = true
 warn_unused_ignores = true
 
 [tool.importlinter]
-root_package = "my_project"
+root_package = "url_shortener"
 include_external_packages = true
 
 # The app's top level: entrypoints wire contexts together through bootstrap.
 # Contexts sit side by side, separated by "|", which also forbids them from
-# importing each other: they only share code through my_project.shared.
+# importing each other: they only share code through url_shortener.shared.
 [[tool.importlinter.contracts]]
 name = "Top-level layers only depend downwards, contexts are independent"
 type = "layers"
 layers = [
-  "my_project.entrypoints",
-  "my_project.bootstrap",
-  "my_project.example",  # add new contexts here: "my_project.example | my_project.billing"
-  "my_project.shared",
+  "url_shortener.entrypoints",
+  "url_shortener.bootstrap",
+  "url_shortener.example",  # add new contexts here: "url_shortener.example | url_shortener.billing"
+  "url_shortener.shared",
 ]
 
 # The dependency rule inside every bounded context.
 [[tool.importlinter.contracts]]
 name = "Layers inside each context only depend downwards"
 type = "layers"
-containers = ["my_project.*"]
+containers = ["url_shortener.*"]
 exhaustive = false
 layers = [
   "(entrypoints)",
@@ -93,11 +93,11 @@ layers = [
 [[tool.importlinter.contracts]]
 name = "Domain models are pure Python"
 type = "forbidden"
-source_modules = ["my_project.*.domain", "my_project.shared.domain"]
+source_modules = ["url_shortener.*.domain", "url_shortener.shared.domain"]
 forbidden_modules = [
   "sqlalchemy",
   "fastapi",
   "pydantic",
   "pydantic_settings",
-  "my_project.config",
+  "url_shortener.config",
 ]

@@ -1,7 +1,7 @@
 from typing import Any
 
-from my_project.shared.domain import Aggregate
-from my_project.shared.repository import AbstractRepository
+from url_shortener.shared.domain import Aggregate
+from url_shortener.shared.repository import AbstractRepository
 
 
 class FakeRepository[T: Aggregate](AbstractRepository[T]):

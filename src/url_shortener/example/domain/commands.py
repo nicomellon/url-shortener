@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from my_project.shared.domain import Command
+from url_shortener.shared.domain import Command
 
 
 @dataclass

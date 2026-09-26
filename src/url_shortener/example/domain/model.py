@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from my_project.shared.domain import Aggregate
+from url_shortener.shared.domain import Aggregate
 
 from . import events
 

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Table
 
-from my_project.example.domain import model
-from my_project.shared.orm import mapper_registry, metadata
+from url_shortener.example.domain import model
+from url_shortener.shared.orm import mapper_registry, metadata
 
 things = Table(
     "things",

@@ -1,4 +1,4 @@
-# my-project
+# url-shortener
 
 A foundation for Python backend services. It follows domain-driven design, with
 code split into bounded contexts that each use the layered architecture from
@@ -26,8 +26,8 @@ Prerequisites: [uv](https://docs.astral.sh/uv/), Docker, and the
    Or click "Use this template" on the
    [GitHub page](https://github.com/nicomellon/python-package-skeleton), then clone
    the new repository.
-2. **Rename the project.** This replaces `my-project` / `my_project` everywhere,
-   renames `src/my_project`, and then deletes the script:
+2. **Rename the project.** This replaces `url-shortener` / `url_shortener` everywhere,
+   renames `src/url_shortener`, and then deletes the script:
    ```sh
    python3 scripts/rename_project.py order-service
    ```
@@ -48,7 +48,7 @@ Prerequisites: [uv](https://docs.astral.sh/uv/), Docker, and the
 6. **Start Postgres and create the tables:**
    ```sh
    docker compose up -d db
-   uv run my-project-admin init-db
+   uv run url-shortener-admin init-db
    ```
 7. **Check that everything passes:**
    ```sh
@@ -57,7 +57,7 @@ Prerequisites: [uv](https://docs.astral.sh/uv/), Docker, and the
 8. **Run the API** and open http://localhost:8000/docs to try the example context's
    endpoints:
    ```sh
-   uv run fastapi dev src/my_project/entrypoints/fastapi_app.py --port 8000
+   uv run fastapi dev src/url_shortener/entrypoints/fastapi_app.py --port 8000
    ```
 9. **Commit and push** the renamed project:
    ```sh
@@ -71,20 +71,20 @@ Prerequisites: [uv](https://docs.astral.sh/uv/), Docker, and the
 
 | Task | Command |
 | --- | --- |
-| Run the API with auto-reload | `uv run fastapi dev src/my_project/entrypoints/fastapi_app.py` |
-| Run the API as in production | `uv run my-project-api` |
+| Run the API with auto-reload | `uv run fastapi dev src/url_shortener/entrypoints/fastapi_app.py` |
+| Run the API as in production | `uv run url-shortener-api` |
 | Run tests | `uv run pytest` |
 | Format / lint | `uv run ruff format .` / `uv run ruff check --fix .` |
 | Type check | `uv run mypy` |
 | Check architecture rules | `uv run lint-imports` |
 | Add a dependency | `uv add <package>` (dev only: `uv add --group dev <package>`) |
-| Run an admin task | `uv run my-project-admin <task>` |
+| Run an admin task | `uv run url-shortener-admin <task>` |
 | Run the whole stack in Docker | `docker compose up --build` |
 
 ## Layout
 
 ```
-src/my_project/
+src/url_shortener/
 ├── example/             # A bounded context (one package per context)
 │   ├── domain/          #   Pure business logic: aggregates, commands, events
 │   ├── service_layer/   #   Handlers, unit of work
@@ -127,9 +127,9 @@ All configuration comes from environment variables. Locally they are read from
 | IV. Backing services | Attached through URLs such as `DATABASE_URL` |
 | V. Build, release, run | `Dockerfile` builds an image; config is added at run time |
 | VI. Processes | Stateless processes; all state lives in backing services |
-| VII. Port binding | `my-project-api` serves HTTP itself on `$PORT` |
+| VII. Port binding | `url-shortener-api` serves HTTP itself on `$PORT` |
 | VIII. Concurrency | Scale out by running more processes |
 | IX. Disposability | Fast startup, graceful shutdown on SIGTERM (FastAPI lifespan) |
 | X. Dev/prod parity | `compose.yaml` runs the same Postgres locally |
 | XI. Logs | Written unbuffered to stdout; the environment collects them |
-| XII. Admin processes | `my-project-admin` runs one-off tasks with the same code and config |
+| XII. Admin processes | `url-shortener-admin` runs one-off tasks with the same code and config |

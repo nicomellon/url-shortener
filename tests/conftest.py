@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import clear_mappers, sessionmaker  # noqa: E402
 
-from my_project import bootstrap, config  # noqa: E402
-from my_project.entrypoints.fastapi_app import app  # noqa: E402
+from url_shortener import bootstrap, config  # noqa: E402
+from url_shortener.entrypoints.fastapi_app import app  # noqa: E402
 
 
 @pytest.fixture

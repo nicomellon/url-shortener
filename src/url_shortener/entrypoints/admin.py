@@ -2,7 +2,7 @@
 
 See https://12factor.net/admin-processes. Usage:
 
-    my-project-admin init-db
+    url-shortener-admin init-db
 """
 
 import argparse
@@ -10,7 +10,7 @@ import logging
 
 from sqlalchemy import create_engine
 
-from my_project import bootstrap, config
+from url_shortener import bootstrap, config
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ COMMANDS = {
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="my-project-admin")
+    parser = argparse.ArgumentParser(prog="url-shortener-admin")
     parser.add_argument("command", choices=COMMANDS)
     args = parser.parse_args()
     config.configure_logging()

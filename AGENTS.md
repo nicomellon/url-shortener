@@ -23,8 +23,8 @@ Other useful commands:
 ```sh
 uv add <package>                     # add a runtime dependency
 uv add --group dev <package>         # add a dev-only dependency
-uv run my-project-api                # serve the API on $PORT
-uv run my-project-admin init-db      # create database tables
+uv run url-shortener-api                # serve the API on $PORT
+uv run url-shortener-admin init-db      # create database tables
 docker compose up -d db              # start local Postgres
 ```
 
@@ -34,7 +34,7 @@ The code is split into **bounded contexts**, one package each, which share a sma
 kernel and are wired together at the top level.
 
 ```
-src/my_project/
+src/url_shortener/
 ├── example/                # A bounded context (a working example: copy it, then delete it)
 │   ├── domain/             #   Business logic. Pure Python, no I/O, no frameworks.
 │   │   ├── model.py        #     Aggregates (subclass shared.domain.Aggregate)
@@ -56,8 +56,8 @@ src/my_project/
 │   ├── orm.py              #   Shared SQLAlchemy registry/metadata, session factory
 │   └── api.py              #   FastAPI dependencies: Bus, DbSession
 ├── entrypoints/            # The running app
-│   ├── fastapi_app.py      #   FastAPI app: mounts every context's router; `my-project-api`
-│   └── admin.py            #   One-off admin tasks (`my-project-admin`)
+│   ├── fastapi_app.py      #   FastAPI app: mounts every context's router; `url-shortener-api`
+│   └── admin.py            #   One-off admin tasks (`url-shortener-admin`)
 ├── bootstrap.py            # Composition root: the only module that knows every context
 └── config.py               # Settings from environment variables, logging setup
 tests/
@@ -116,7 +116,7 @@ Work from the inside out, writing tests as you go. `example/` shows each step.
 
 ## Adding a bounded context
 
-1. Copy `src/my_project/example/` to `src/my_project/<context>/` and
+1. Copy `src/url_shortener/example/` to `src/url_shortener/<context>/` and
    `tests/example/` to `tests/<context>/`, then replace the Thing code with your own.
    Rename the tables.
 2. In `bootstrap.py`, import the context's `orm`, `handlers` and `unit_of_work`. Call
@@ -124,7 +124,7 @@ Work from the inside out, writing tests as you go. `example/` shows each step.
    `bootstrap`, add an entry to `contexts`, and add its uow to `uows`.
 3. In `entrypoints/fastapi_app.py`, `include_router` the context's router.
 4. In `pyproject.toml`, add the context to the top-level layers contract:
-   `"my_project.example | my_project.<context>"`. The other contracts pick it up
+   `"url_shortener.example | url_shortener.<context>"`. The other contracts pick it up
    automatically.
 5. Once you have real contexts, delete `example/` and `tests/example/` and remove
    their references from the three files above.
@@ -163,8 +163,8 @@ Work from the inside out, writing tests as you go. `example/` shows each step.
   implementations named after their technology (`SqlAlchemy...`) and fakes named
   `Fake...`.
 - Import modules rather than names within a context
-  (`from my_project.example.domain import commands`, then `commands.CreateThing`).
+  (`from url_shortener.example.domain import commands`, then `commands.CreateThing`).
   When a module name clashes across contexts, alias it with the context name
-  (`from my_project.example.adapters import orm as example_orm`).
+  (`from url_shortener.example.adapters import orm as example_orm`).
 - Keep comments sparse. Explain *why*, not what.
 - Test names describe behaviour: `test_cannot_create_a_thing_twice`.

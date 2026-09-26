@@ -5,8 +5,8 @@ from collections.abc import Iterator
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from my_project.shared import repository
-from my_project.shared.domain import Event
+from url_shortener.shared import repository
+from url_shortener.shared.domain import Event
 
 
 class AbstractUnitOfWork(abc.ABC):

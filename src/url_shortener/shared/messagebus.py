@@ -4,10 +4,10 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
-from my_project.shared.domain import Command, Event
+from url_shortener.shared.domain import Command, Event
 
 if TYPE_CHECKING:
-    from my_project.shared.unit_of_work import AbstractUnitOfWork
+    from url_shortener.shared.unit_of_work import AbstractUnitOfWork
 
 logger = logging.getLogger(__name__)
 
