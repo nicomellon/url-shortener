@@ -1,0 +1,13 @@
+global:
+  # Short, so load tests show up in Grafana within seconds
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: api
+    static_configs:
+      # The API running on your machine (uv run url-shortener-api), or in compose
+      - targets: ["host.docker.internal:8000", "api:8000"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]

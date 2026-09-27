@@ -15,6 +15,7 @@ authors = [
 ]
 dependencies = [
   "fastapi[standard]",
+  "prometheus-client>=0.26.0",
   "psycopg[binary]",
   "pydantic-settings",
   "sqlalchemy>=2.0",
@@ -64,36 +65,22 @@ warn_unused_ignores = true
 root_package = "url_shortener"
 include_external_packages = true
 
-# The app's top level: entrypoints wire contexts together through bootstrap.
-# Contexts sit side by side, separated by "|", which also forbids them from
-# importing each other: they only share code through url_shortener.shared.
+# The dependency rule: each layer only imports from layers below it. Views and the
+# service layer sit side by side ("|") and must not import each other.
 [[tool.importlinter.contracts]]
-name = "Top-level layers only depend downwards, contexts are independent"
+name = "Layers only depend downwards"
 type = "layers"
 layers = [
   "url_shortener.entrypoints",
-  "url_shortener.bootstrap",
-  "url_shortener.urls",  # add new contexts here: "url_shortener.urls | url_shortener.billing"
-  "url_shortener.shared",
-]
-
-# The dependency rule inside every bounded context.
-[[tool.importlinter.contracts]]
-name = "Layers inside each context only depend downwards"
-type = "layers"
-containers = ["url_shortener.*"]
-exhaustive = false
-layers = [
-  "(entrypoints)",
-  "(views) | (service_layer)",
-  "(adapters)",
-  "(domain)",
+  "url_shortener.views | url_shortener.service_layer",
+  "url_shortener.adapters",
+  "url_shortener.domain",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Domain models are pure Python"
 type = "forbidden"
-source_modules = ["url_shortener.*.domain", "url_shortener.shared.domain"]
+source_modules = ["url_shortener.domain"]
 forbidden_modules = [
   "sqlalchemy",
   "fastapi",
