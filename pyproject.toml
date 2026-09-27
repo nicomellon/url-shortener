@@ -73,7 +73,7 @@ type = "layers"
 layers = [
   "url_shortener.entrypoints",
   "url_shortener.bootstrap",
-  "url_shortener.example",  # add new contexts here: "url_shortener.example | url_shortener.billing"
+  "url_shortener.urls",  # add new contexts here: "url_shortener.urls | url_shortener.billing"
   "url_shortener.shared",
 ]
 

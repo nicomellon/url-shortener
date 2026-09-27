@@ -7,9 +7,14 @@ entrypoints), and the [twelve-factor app](https://12factor.net/) guidelines. It
 ships with FastAPI, SQLAlchemy 2, Postgres, uv, Docker, and enforced code style and
 architecture rules.
 
-It includes one working example context (`example`, managing "Things") that shows a
-complete slice from domain to HTTP. Copy it to create your own contexts, then delete
-it. For the architecture, conventions and step-by-step guides to adding features and
+It has one bounded context, `urls`, with two endpoints:
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /urls` | Body `{"url": "https://..."}`. Returns `201` with `short_code`, `short_url` and `url`. |
+| `GET /{short_code}` | Redirects (`302`) to the original URL, or `404` if the code is unknown. |
+
+For the architecture, conventions and step-by-step guides to adding features and
 contexts, see [AGENTS.md](AGENTS.md).
 
 ## Starting a new project from this skeleton
@@ -54,7 +59,7 @@ Prerequisites: [uv](https://docs.astral.sh/uv/), Docker, and the
    ```sh
    uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run lint-imports && uv run pytest
    ```
-8. **Run the API** and open http://localhost:8000/docs to try the example context's
+8. **Run the API** and open http://localhost:8000/docs to try the
    endpoints:
    ```sh
    uv run fastapi dev src/url_shortener/entrypoints/fastapi_app.py --port 8000
@@ -85,7 +90,7 @@ Prerequisites: [uv](https://docs.astral.sh/uv/), Docker, and the
 
 ```
 src/url_shortener/
-├── example/             # A bounded context (one package per context)
+├── urls/                # A bounded context (one package per context)
 │   ├── domain/          #   Pure business logic: aggregates, commands, events
 │   ├── service_layer/   #   Handlers, unit of work
 │   ├── adapters/        #   ORM mappings, other infrastructure
@@ -97,7 +102,7 @@ src/url_shortener/
 └── config.py            # Settings from environment variables, logging setup
 tests/
 ├── shared/              # Shared kernel tests
-├── example/             # One folder per context: unit/, integration/, e2e/
+├── urls/                # One folder per context: unit/, integration/, e2e/
 └── e2e/                 # App-wide tests
 ```
 

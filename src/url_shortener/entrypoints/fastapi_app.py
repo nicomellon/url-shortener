@@ -6,8 +6,8 @@ from fastapi import FastAPI
 from sqlalchemy.orm import clear_mappers
 
 from url_shortener import bootstrap, config
-from url_shortener.example.entrypoints import api as example_api
 from url_shortener.shared import orm
+from url_shortener.urls.entrypoints import api as urls_api
 
 
 @asynccontextmanager
@@ -21,12 +21,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
-app.include_router(example_api.router)
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# Last, because its catch-all GET /{short_code} would shadow routes added after it
+app.include_router(urls_api.router)
 
 
 def main():

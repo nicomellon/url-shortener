@@ -11,22 +11,22 @@ from collections.abc import Callable
 from sqlalchemy import Engine
 from sqlalchemy.orm import sessionmaker
 
-from url_shortener.example.adapters import orm as example_orm
-from url_shortener.example.service_layer import handlers as example_handlers
-from url_shortener.example.service_layer import unit_of_work as example_unit_of_work
 from url_shortener.shared import messagebus, orm
 from url_shortener.shared.domain import Command, Event
+from url_shortener.urls.adapters import orm as urls_orm
+from url_shortener.urls.service_layer import handlers as urls_handlers
+from url_shortener.urls.service_layer import unit_of_work as urls_unit_of_work
 
 
 def bootstrap(
     start_orm: bool = True,
     session_factory: sessionmaker | None = None,
-    example_uow: example_unit_of_work.AbstractUnitOfWork | None = None,
+    urls_uow: urls_unit_of_work.AbstractUnitOfWork | None = None,
 ) -> messagebus.MessageBus:
     if session_factory is None:
         session_factory = orm.default_session_factory()
-    if example_uow is None:
-        example_uow = example_unit_of_work.SqlAlchemyUnitOfWork(session_factory)
+    if urls_uow is None:
+        urls_uow = urls_unit_of_work.SqlAlchemyUnitOfWork(session_factory)
 
     if start_orm:
         start_mappers()
@@ -34,7 +34,7 @@ def bootstrap(
     # One entry per context: its handlers, and the dependencies they can ask for
     # by parameter name. Add adapters (notifications, publishers, ...) here too.
     contexts = [
-        (example_handlers, {"uow": example_uow}),
+        (urls_handlers, {"uow": urls_uow}),
     ]
 
     command_handlers: dict[type[Command], Callable] = {}
@@ -48,14 +48,14 @@ def bootstrap(
             )
 
     return messagebus.MessageBus(
-        uows=[example_uow],
+        uows=[urls_uow],
         event_handlers=dict(event_handlers),
         command_handlers=command_handlers,
     )
 
 
 def start_mappers():
-    example_orm.start_mappers()
+    urls_orm.start_mappers()
 
 
 def create_tables(engine: Engine):

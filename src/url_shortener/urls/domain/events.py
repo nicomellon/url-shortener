@@ -4,5 +4,6 @@ from url_shortener.shared.domain import Event
 
 
 @dataclass
-class ThingCreated(Event):
-    ref: str
+class ShortURLCreated(Event):
+    short_code: str
+    url: str
