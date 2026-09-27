@@ -16,6 +16,7 @@ authors = [
 dependencies = [
   "fastapi[standard]",
   "prometheus-client>=0.26.0",
+  "psutil>=7.2.2",
   "psycopg[binary]",
   "pydantic-settings",
   "sqlalchemy>=2.0",
@@ -32,6 +33,7 @@ dev = [
   "mypy",
   "pytest",
   "ruff",
+  "types-psutil>=7.2.2.20260906",
 ]
 
 [tool.pytest.ini_options]

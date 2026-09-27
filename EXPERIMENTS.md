@@ -37,10 +37,65 @@ flush); reads already use a raw `text()` query in `views.py`.
 - **Tip:** compare at a fixed rate below saturation (CPU usage and p50) and at the
   breaking point (`ramp.js`).
 
+### One round trip per read
+
+Every read runs `BEGIN`, `SELECT`, `ROLLBACK`: the session opens a transaction and
+closing it rolls back. At 5,288 reads/s Postgres counted 5,208 rollbacks/s.
+
+- **Change:** run views on an autocommit connection (or `engine.connect()` with
+  `isolation_level="AUTOCOMMIT"`), so a read is a single statement.
+- **Questions:** How much do Postgres CPU and API CPU per request drop? Does the
+  8-worker ceiling move, given the whole machine was saturated there?
+
+### Read cache
+
+Short URLs never change once created, so a cache of code → URL never needs
+invalidating. Try an in-process LRU cache first, and compare hit rates with
+`SKEW=1` (uniform) and `SKEW=3` (hot keys).
+
+### Load shedding
+
+Under overload the API accepts every request and queues it, so throughput *drops*
+(1 worker: 1,528 req/s at 3,000 offered, 1,119 at 8,000) and everyone waits
+seconds. Try capping concurrency per worker (uvicorn `limit_concurrency`) so excess
+requests fail fast with 503, and compare goodput and p99.
+
 ## Done
 
-- **Shared unit of work under concurrency (DDIA ch. 1).** A single message bus and
-  unit of work shared across FastAPI's thread pool made concurrent writes overwrite
-  each other's session: 17 failed writes at 3,000 reads/s. Fixed by removing the bus
-  and unit of work and using one session per request. Regression test:
-  `tests/e2e/test_concurrency.py`.
+### Scaling out with worker processes (DDIA ch. 1)
+
+**Prediction:** one Python process is CPU-bound (the GIL), so throughput should
+scale with workers until something else saturates.
+
+**Setup:** `ramp.js`, reads stepping from 1,000 to 8,000/s (15s steps), 100
+writes/s, 1M seeded URLs, uniform keys. k6 on the Mac; Postgres in Colima (6 CPUs,
+8 GiB), reached through the VM's IP; `DB_POOL_SIZE=5 DB_MAX_OVERFLOW=5` per
+worker. Mac: 12 cores. 0 failed requests across all runs (2.2M requests).
+
+| Workers | Highest step sustained (p99 < 100 ms) | Peak throughput | API CPU there | Server p99 there |
+| --- | --- | --- | --- | --- |
+| 1 | 2,000 req/s | 2,007 | 0.7 cores | 8 ms |
+| 2 | 3,000 req/s | 3,799 (p99 301 ms) | 1.3 cores | 8 ms |
+| 4 | 4,000 req/s | 4,705 (p99 360 ms) | 2.3 cores | 20 ms |
+| 8 | 6,000 req/s | 5,969 | 6.8 cores | 52 ms |
+
+**Findings:**
+- Confirmed: a single worker saturates at about 1.3–1.6 cores (not 1.0: psycopg and
+  uvloop do some work outside the GIL). Postgres was at 15–20% CPU meanwhile.
+- Scaling is sublinear: 1 → 2 workers nearly doubles capacity, then each doubling
+  gains about 30%.
+- At 8 workers the **whole Mac** is saturated (about 94% of 12 cores: API ~7,
+  Postgres VM ~3.6, k6 ~1). More workers won't help on one machine; the DDIA target
+  of 10,000 reads/s needs cheaper requests or more machines.
+- Past saturation, throughput falls as offered load rises (see Load shedding).
+- Side finding: Colima's default SSH port forwarder took Postgres round trips from
+  103 µs to 248 µs, and crashed at a few thousand queries/s, taking the Docker
+  socket with it. A proxy in the data path became both a bottleneck and a single
+  point of failure.
+
+### Shared unit of work under concurrency
+
+A single message bus and unit of work shared across FastAPI's thread pool made
+concurrent writes overwrite each other's session: 17 failed writes at 3,000
+reads/s. Fixed by removing the bus and unit of work and using one session per
+request. Regression test: `tests/e2e/test_concurrency.py`.

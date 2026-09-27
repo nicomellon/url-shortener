@@ -24,4 +24,10 @@ def create_tables(engine: Engine):
 
 
 def default_session_factory() -> sessionmaker:
-    return sessionmaker(bind=create_engine(config.get_settings().database_url))
+    settings = config.get_settings()
+    engine = create_engine(
+        settings.database_url,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+    )
+    return sessionmaker(bind=engine)

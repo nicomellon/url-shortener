@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
     access_log: bool = True
+    web_concurrency: int = 1
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    # Set by fastapi_app.main when running several workers, not by hand
+    prometheus_multiproc_dir: str | None = None
 
 
 @lru_cache

@@ -101,10 +101,14 @@ them once you know what your machine can take.
    docker compose up -d db prometheus postgres-exporter grafana
    uv run url-shortener-admin seed-urls --count 10000000   # about 2 minutes
    ```
-3. Run the API on your machine, without access logs:
+3. Run the API on your machine, without access logs. `WEB_CONCURRENCY` sets the
+   number of worker processes (one process tops out around 2,000 reads/s):
    ```sh
-   ACCESS_LOG=false uv run url-shortener-api
+   ACCESS_LOG=false WEB_CONCURRENCY=4 uv run url-shortener-api
    ```
+   Each worker has its own connection pool, so keep
+   `WEB_CONCURRENCY × (DB_POOL_SIZE + DB_MAX_OVERFLOW)` below Postgres'
+   `max_connections` (100). For 8 workers, use `DB_MAX_OVERFLOW=5`.
 4. Open the dashboard at http://localhost:3000 and run a test:
    ```sh
    loadtest/run.sh steady -e SEED_COUNT=10000000                      # 1,000 reads/s, 10 writes/s, 5 minutes
@@ -135,16 +139,21 @@ Test options, passed as `-e NAME=value`:
   reports `dropped_iterations`; any drops mean the target rate wasn't reached.
 - **Percentiles from histograms are estimates.** Prometheus interpolates within
   histogram buckets, so the API's percentiles are only as precise as the bucket
-  edges in `metrics.py`. k6's numbers are exact.
+  edges in `metrics.py`. k6's numbers are exact. The largest bucket is 10s, so
+  under heavy overload the API's percentiles flatten out just below 10s.
+- **API CPU is in cores.** 1.0 is one core fully busy. One worker can't use much
+  more than 1.5 cores (Python's GIL), so a worker near that is CPU-bound.
 
 ### Caveats
 
 - Everything runs on one machine, so the load generator, API and database compete
-  for CPU. Check Docker Desktop's resource settings: with 2 CPUs, Postgres is
-  starved long before the API is.
-- The API is a single process. Request rates beyond what one Python process can
-  serve need more processes (`uvicorn --workers`), which also needs Prometheus'
-  multiprocess mode for the metrics.
+  for CPU. Give the Docker VM enough CPUs (Colima: `colima start --cpu 6
+  --memory 8`); with 2, Postgres is starved long before the API is. With 8
+  workers, the whole machine saturates, not just the API.
+- On Colima, connect the API to Postgres through the VM's own address
+  (`colima start --network-address`, then use the address from `colima list` in
+  `DATABASE_URL`). The default SSH port forwarder more than doubles each query's
+  round trip, and it failed under load.
 
 ## Configuration
 
@@ -158,6 +167,9 @@ All configuration comes from environment variables. Locally they are read from
 | `HOST` | no | `0.0.0.0` | Interface the API binds to |
 | `LOG_LEVEL` | no | `INFO` | Python log level |
 | `ACCESS_LOG` | no | `true` | Log every HTTP request. Turn off for load tests: it costs CPU per request |
+| `WEB_CONCURRENCY` | no | `1` | API worker processes |
+| `DB_POOL_SIZE` | no | `5` | Database connections each worker keeps open |
+| `DB_MAX_OVERFLOW` | no | `10` | Extra connections each worker may open under load |
 | `DB_PORT` | no | `5432` | Host port for the local Postgres container (compose only) |
 
 ## Twelve-factor

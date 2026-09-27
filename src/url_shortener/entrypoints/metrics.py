@@ -3,25 +3,33 @@
 Latency is recorded as a histogram rather than as precomputed percentiles, because
 percentiles can't be averaged across instances or time windows, but histogram buckets
 can be summed and then turned into percentiles by Prometheus.
+
+With several worker processes, each worker writes its metrics to files in
+PROMETHEUS_MULTIPROC_DIR, and whichever worker serves /metrics adds them all up.
+So every metric here must be push-based (updated by the process it describes), and
+gauges declare how to combine the workers' values.
 """
 
+import os
+import threading
 import time
-from collections.abc import Iterator
 
+import psutil
 from fastapi import APIRouter, Response
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     REGISTRY,
+    CollectorRegistry,
     Counter,
     Gauge,
     Histogram,
     generate_latest,
+    multiprocess,
 )
-from prometheus_client.core import GaugeMetricFamily
-from prometheus_client.registry import Collector
-from sqlalchemy import Engine
-from sqlalchemy.pool import QueuePool
+from sqlalchemy import Engine, event
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from url_shortener import config
 
 REQUESTS = Counter(
     "http_requests_total",
@@ -52,7 +60,31 @@ REQUEST_DURATION = Histogram(
     ),
 )
 REQUESTS_IN_PROGRESS = Gauge(
-    "http_requests_in_progress", "HTTP requests currently being handled"
+    "http_requests_in_progress",
+    "HTTP requests currently being handled",
+    multiprocess_mode="livesum",
+)
+DB_POOL_CHECKED_OUT = Gauge(
+    "db_pool_checked_out",
+    "Database connections currently in use by requests",
+    multiprocess_mode="livesum",
+)
+DB_POOL_CONNECTIONS_OPEN = Gauge(
+    "db_pool_connections_open",
+    "Database connections open, in use or idle",
+    multiprocess_mode="livesum",
+)
+# "app_" rather than the standard "process_", which the Linux-only built-in
+# collector already uses. One series per worker, to show how evenly load spreads.
+PROCESS_CPU_SECONDS = Gauge(
+    "app_process_cpu_seconds",
+    "CPU time used by the API process (user + system)",
+    multiprocess_mode="liveall",
+)
+PROCESS_MEMORY = Gauge(
+    "app_process_resident_memory_bytes",
+    "Resident memory of the API process",
+    multiprocess_mode="liveall",
 )
 
 router = APIRouter()
@@ -60,7 +92,20 @@ router = APIRouter()
 
 @router.get("/metrics", include_in_schema=False)
 def metrics() -> Response:
-    return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+    multiproc_dir = config.get_settings().prometheus_multiproc_dir
+    if multiproc_dir:
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry, path=multiproc_dir)
+    else:
+        registry = REGISTRY
+    return Response(generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+
+
+def mark_process_dead() -> None:
+    """Drop this process' live gauges, so a stopped worker stops counting."""
+    multiproc_dir = config.get_settings().prometheus_multiproc_dir
+    if multiproc_dir:
+        multiprocess.mark_process_dead(os.getpid(), multiproc_dir)
 
 
 class PrometheusMiddleware:
@@ -99,27 +144,41 @@ class PrometheusMiddleware:
             REQUESTS.labels(method, handler, str(status)).inc()
 
 
-class ConnectionPoolCollector(Collector):
-    """Reports how busy the SQLAlchemy connection pool is when scraped. Requests
-    that wait for a free connection queue here, not in Postgres."""
+def register_pool_metrics(engine: Engine) -> None:
+    """Track the engine's connection pool. Requests that wait for a free
+    connection queue here, not in Postgres."""
+    event.listen(engine, "connect", lambda *_: DB_POOL_CONNECTIONS_OPEN.inc())
+    event.listen(engine, "close", lambda *_: DB_POOL_CONNECTIONS_OPEN.dec())
+    event.listen(engine, "close_detached", lambda *_: DB_POOL_CONNECTIONS_OPEN.dec())
+    event.listen(engine, "checkout", lambda *_: DB_POOL_CHECKED_OUT.inc())
+    event.listen(engine, "checkin", lambda *_: DB_POOL_CHECKED_OUT.dec())
 
-    def __init__(self, engine: Engine) -> None:
-        self.engine = engine
 
-    def collect(self) -> Iterator[GaugeMetricFamily]:
-        pool = self.engine.pool
-        if not isinstance(pool, QueuePool):
-            return
-        yield GaugeMetricFamily(
-            "db_pool_size", "Connections the pool keeps open", value=pool.size()
+class ProcessSampler:
+    """Samples this process' CPU and memory in a background thread. The built-in
+    process collector only works on Linux; psutil also works on macOS."""
+
+    def __init__(self, interval_seconds: float = 1.0) -> None:
+        self._process = psutil.Process()
+        self._interval_seconds = interval_seconds
+        self._stopped = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="process-sampler", daemon=True
         )
-        yield GaugeMetricFamily(
-            "db_pool_checked_out",
-            "Connections currently in use by requests",
-            value=pool.checkedout(),
-        )
-        yield GaugeMetricFamily(
-            "db_pool_overflow",
-            "Connections open beyond the pool size",
-            value=max(pool.overflow(), 0),
-        )
+
+    def sample(self) -> None:
+        cpu = self._process.cpu_times()
+        PROCESS_CPU_SECONDS.set(cpu.user + cpu.system)
+        PROCESS_MEMORY.set(self._process.memory_info().rss)
+
+    def start(self) -> None:
+        self.sample()
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stopped.set()
+        self._thread.join()
+
+    def _run(self) -> None:
+        while not self._stopped.wait(self._interval_seconds):
+            self.sample()

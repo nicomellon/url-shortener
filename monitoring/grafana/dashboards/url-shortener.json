@@ -270,13 +270,13 @@
     },
     {
       "type": "timeseries",
-      "title": "DB connection pool",
+      "title": "DB connection pool (all workers)",
       "id": 6,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "When every connection is in use, further requests wait for one (pool_size + max_overflow = 15 by default).",
+      "description": "When every connection in a worker's pool is in use, that worker's requests wait for one. Each worker has up to DB_POOL_SIZE + DB_MAX_OVERFLOW (15 by default).",
       "gridPos": {
         "x": 16,
         "y": 9,
@@ -326,19 +326,199 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "sum(db_pool_size + db_pool_overflow)",
+          "expr": "sum(db_pool_connections_open)",
           "legendFormat": "open"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "API CPU (cores)",
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "1.0 = one core fully busy. A single worker can't use much more than one core for Python code (the GIL), so a worker pinned near 1.0 is CPU-bound.",
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 5,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(rate(app_process_cpu_seconds[$__rate_interval]))",
+          "legendFormat": "total"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "rate(app_process_cpu_seconds[$__rate_interval])",
+          "legendFormat": "pid {{pid}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "API memory",
+      "id": 8,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 5,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(app_process_resident_memory_bytes)",
+          "legendFormat": "total"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "app_process_resident_memory_bytes",
+          "legendFormat": "pid {{pid}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Workers",
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "API processes reporting metrics (WEB_CONCURRENCY).",
+      "gridPos": {
+        "x": 16,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 5,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "count(app_process_cpu_seconds)",
+          "legendFormat": "workers"
         }
       ]
     },
     {
       "type": "row",
       "title": "Load generator (k6, client side)",
-      "id": 7,
+      "id": 10,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 17,
+        "y": 25,
         "w": 24,
         "h": 1
       },
@@ -347,7 +527,7 @@
     {
       "type": "timeseries",
       "title": "Requests per second sent",
-      "id": 8,
+      "id": 11,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -355,7 +535,7 @@
       "description": "Dropped iterations: requests k6 should have sent but couldn't, because all its VUs were busy waiting on slow responses. Any drops mean the target rate wasn't reached.",
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 26,
         "w": 12,
         "h": 8
       },
@@ -410,7 +590,7 @@
     {
       "type": "timeseries",
       "title": "Response time percentiles (as users see it)",
-      "id": 9,
+      "id": 12,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -418,7 +598,7 @@
       "description": "Measured by the client, so it includes network and queueing time. DDIA's 'response time', where the API's panel is closer to 'service time'.",
       "gridPos": {
         "x": 12,
-        "y": 18,
+        "y": 26,
         "w": 12,
         "h": 8
       },
@@ -482,7 +662,7 @@
     {
       "type": "timeseries",
       "title": "Failed requests",
-      "id": 10,
+      "id": 13,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -490,7 +670,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 34,
         "w": 12,
         "h": 6
       },
@@ -536,7 +716,7 @@
     {
       "type": "timeseries",
       "title": "Virtual users",
-      "id": 11,
+      "id": 14,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -544,7 +724,7 @@
       "description": "k6 workers busy waiting on a response. At a fixed arrival rate, more VUs means slower responses (Little's law).",
       "gridPos": {
         "x": 12,
-        "y": 26,
+        "y": 34,
         "w": 12,
         "h": 6
       },
@@ -590,11 +770,11 @@
     {
       "type": "row",
       "title": "Postgres",
-      "id": 12,
+      "id": 15,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 40,
         "w": 24,
         "h": 1
       },
@@ -603,7 +783,7 @@
     {
       "type": "timeseries",
       "title": "Transactions per second",
-      "id": 13,
+      "id": 16,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -611,7 +791,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 33,
+        "y": 41,
         "w": 8,
         "h": 8
       },
@@ -666,7 +846,7 @@
     {
       "type": "timeseries",
       "title": "Buffer cache hit ratio",
-      "id": 14,
+      "id": 17,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -674,7 +854,7 @@
       "description": "Share of page reads served from Postgres' memory rather than the OS or disk. Drops when the working set no longer fits in shared_buffers (try SKEW and SEED_COUNT).",
       "gridPos": {
         "x": 8,
-        "y": 33,
+        "y": 41,
         "w": 8,
         "h": 8
       },
@@ -720,7 +900,7 @@
     {
       "type": "timeseries",
       "title": "Blocks read from disk/OS per second",
-      "id": 15,
+      "id": 18,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -728,7 +908,7 @@
       "description": "",
       "gridPos": {
         "x": 16,
-        "y": 33,
+        "y": 41,
         "w": 8,
         "h": 8
       },
@@ -774,7 +954,7 @@
     {
       "type": "timeseries",
       "title": "Connections",
-      "id": 16,
+      "id": 19,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -782,7 +962,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 41,
+        "y": 49,
         "w": 12,
         "h": 6
       },
@@ -828,7 +1008,7 @@
     {
       "type": "timeseries",
       "title": "Database size",
-      "id": 17,
+      "id": 20,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -836,7 +1016,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 41,
+        "y": 49,
         "w": 12,
         "h": 6
       },
