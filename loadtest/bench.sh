@@ -10,6 +10,10 @@
 set -uo pipefail
 
 workers=("${@:-1}")
+if curl -sf localhost:8000/health >/dev/null; then
+  echo "Something is already serving on port 8000; stop it first" >&2
+  exit 1
+fi
 dir=$(cd "$(dirname "$0")" && pwd)
 out="$dir/results/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$out"
@@ -17,16 +21,11 @@ cd "$dir/.."
 
 export ACCESS_LOG=false
 export DB_POOL_SIZE=${DB_POOL_SIZE:-5} DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-5}
-export MAX_READ_RATE=${MAX_READ_RATE:-8000} STEPS=${STEPS:-8} STEP_SECONDS=${STEP_SECONDS:-15}
+export MAX_READ_RATE=${MAX_READ_RATE:-16000} STEPS=${STEPS:-8} STEP_SECONDS=${STEP_SECONDS:-15}
 WRITE_RATE=${WRITE_RATE:-100}
 SEED_COUNT=${SEED_COUNT:-1000000}
 printf 'MAX_READ_RATE=%s\nSTEPS=%s\nSTEP_SECONDS=%s\n' \
   "$MAX_READ_RATE" "$STEPS" "$STEP_SECONDS" > "$out/params"
-
-if curl -sf localhost:8000/health >/dev/null; then
-  echo "Something is already serving on port 8000; stop it first" >&2
-  exit 1
-fi
 
 # Postgres CPU (inside the Docker VM) and this machine's CPU by process group,
 # sampled every few seconds, for analyze.py
@@ -61,7 +60,10 @@ for w in "${workers[@]}"; do
   sleep 2
 
   echo "$w $(date +%s)" >> "$out/starts.txt"
-  loadtest/run.sh ramp -e MAX_READ_RATE="$MAX_READ_RATE" -e STEPS="$STEPS" \
+  # testid tells this run's k6 series apart from the previous run's, which
+  # Prometheus keeps returning for 5 minutes after they stop
+  loadtest/run.sh ramp --tag testid="$(basename "$out")-$w" \
+    -e MAX_READ_RATE="$MAX_READ_RATE" -e STEPS="$STEPS" \
     -e STEP_SECONDS="$STEP_SECONDS" -e WRITE_RATE="$WRITE_RATE" \
     -e SEED_COUNT="$SEED_COUNT" > "$out/k6-$w.txt" 2>&1
 

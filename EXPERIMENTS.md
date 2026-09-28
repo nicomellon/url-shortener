@@ -4,6 +4,32 @@ Experiments to run against this app, with the load tests and dashboard described
 the README. For each one: write down a prediction first, run the same load test
 before and after, and compare the p50/p95/p99 and throughput on the dashboard.
 
+## Baseline
+
+What each experiment compares against. `make bench BENCH_WORKERS="4 8"`: reads
+ramp from 2,000 to 16,000/s in 15s steps, plus 100 writes/s. 1M seeded URLs,
+uniform keys, pool 5 + 5 per worker. Same machine as below (12-core Mac, Postgres
+in Colima with 6 CPUs). Recorded after single-statement reads (2026-09-28).
+
+| Workers | Highest step sustained | Server p99 there | Peak throughput | API µs / DB µs per read, at 4,000/s |
+| --- | --- | --- | --- | --- |
+| 4 | 6,000 req/s | 20 ms | 7,273 (p99 495 ms) | 273 / 44 |
+| 8 | 8,000 req/s | 9 ms | 9,925 (p99 91 ms, the Mac at 95%) | 314 / 40 |
+
+- **Python costs about 7× more CPU per read than Postgres.** Changes to the API
+  process (ORM vs raw SQL, async, a cache) have the most room to show up.
+- **8 workers reach the DDIA target of 10,000 reads/s, but only just, and with
+  the whole Mac saturated** (1,135% of 1,200%: API ~6.8 cores, Postgres ~5, k6
+  ~1.2), and k6 already dropping 43 requests/s. At that point CPU contention
+  inflates everything's cost: Postgres went from 40 to 521 µs per read. So
+  compare µs per request at steps *below* saturation.
+- Past the ceiling nothing failed, but throughput fell and k6 dropped requests it
+  couldn't send (4 workers: 6,955 req/s at 12,000 offered).
+- Past the ceiling k6's p99 is about 8.2 s while the server's is under 0.5 s: the
+  connections that don't fit in the accept queue have their SYNs retried after 1,
+  2 and 4 s. The server's latency can't see this queue at all, only the client's
+  can.
+
 ## To do
 
 ### Sync vs. async request handling
@@ -36,6 +62,22 @@ flush); reads already use a raw `text()` query in `views.py`.
   lose in readability and safety?
 - **Tip:** compare at a fixed rate below saturation (CPU usage and p50) and at the
   breaking point (`ramp.js`).
+
+### Another language for the hot path
+
+A read costs about 300 µs of API CPU and 40 µs in Postgres (see Baseline). How much
+of that is Python, and how much is our stack: FastAPI's routing and dependency
+injection, the metrics middleware, the thread-pool hop for sync routes, SQLAlchemy?
+
+- **First:** profile a worker under load (py-spy flame graph) to split those up.
+  Some of the cost may be fixable without leaving Python.
+- **Change:** a small Go service serving only `GET /{short_code}` (net/http and
+  pgx) against the same Postgres, benchmarked with the same ramp.
+- **Prediction:** 5–10× less API CPU per read, but on one Mac the ceiling rises only
+  2–3× before Postgres and k6 saturate it.
+- **Questions:** Is the gain worth a second codebase and toolchain? A faster
+  language lowers the cost per request (a constant factor), while scaling out
+  changes how capacity grows with machines (DDIA ch. 1).
 
 ### Read cache
 

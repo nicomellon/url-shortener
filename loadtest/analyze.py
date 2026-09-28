@@ -22,13 +22,15 @@ QUERIES = {
     f"(rate(http_request_duration_seconds_bucket{{{READS}}}[10s])))",
     "p99": "histogram_quantile(0.99, sum by (le) "
     f"(rate(http_request_duration_seconds_bucket{{{READS}}}[10s])))",
-    "k6_p99": 'max(k6_http_req_duration_p99{name="GET /{short_code}"})',
+    # TESTID selects this run's k6 series: Prometheus keeps returning a series for
+    # 5 minutes after it stops, so the previous run's would leak into this one
+    "k6_p99": 'max(k6_http_req_duration_p99{name="GET /{short_code}",TESTID})',
     # "or vector(0)": k6 only creates these series once something drops or fails
-    "dropped": "sum(rate(k6_dropped_iterations_total[10s])) or vector(0)",
+    "dropped": "sum(rate(k6_dropped_iterations_total{TESTID}[10s])) or vector(0)",
     # From the request counter: k6's http_req_failed gauge has one series per
-    # status, and a stale failure series lingers into the next run
-    "failed": 'sum(rate(k6_http_reqs_total{expected_response="false"}[10s])) '
-    "/ sum(rate(k6_http_reqs_total[10s])) or vector(0)",
+    # status, which can't be averaged into a rate
+    "failed": 'sum(rate(k6_http_reqs_total{expected_response="false",TESTID}[10s]))'
+    " / sum(rate(k6_http_reqs_total{TESTID}[10s])) or vector(0)",
     "api_cores": "sum(rate(app_process_cpu_seconds[10s]))",
     "pool": "sum(db_pool_checked_out)",
 }
@@ -59,10 +61,13 @@ def main(out: Path) -> None:
     max_rate, steps = int(params["MAX_READ_RATE"]), int(params["STEPS"])
     hold = int(params["STEP_SECONDS"])
 
+    # API and DB µs/req: CPU time per request, which shows an improvement even
+    # below saturation, where latency barely moves. k6%: the load generator's
+    # share of this machine; when host% nears 100 it measures the Mac, not the app.
     print(
         f"{'workers':>7} {'target':>6} {'reads/s':>7} {'p50':>8} {'p99':>8} "
-        f"{'k6 p99':>8} {'drop/s':>6} {'fail%':>5} {'API cpu':>7} {'pool':>4} "
-        f"{'DB cpu%':>7} {'host%':>5}"
+        f"{'k6 p99':>8} {'drop/s':>6} {'fail%':>5} {'API cpu':>7} {'API µs':>6} "
+        f"{'pool':>4} {'DB cpu%':>7} {'DB µs':>5} {'k6%':>4} {'host%':>5}"
     )
     for line in (out / "starts.txt").read_text().splitlines():
         workers, started = line.split()
@@ -70,15 +75,24 @@ def main(out: Path) -> None:
             # Skip the first seconds of each hold, while rates settle
             hold_end = int(started) + 1 + step * (RAMP_SECONDS + hold)
             start, end = hold_end - hold + 4, hold_end - 1
-            r = {name: prometheus_avg(q, start, end) for name, q in QUERIES.items()}
+            # bench.sh tags each k6 run; older runs have no testid
+            testid = f'testid=~"({out.name}-{workers})?"'
+            r = {
+                name: prometheus_avg(q.replace("TESTID", testid), start, end)
+                for name, q in QUERIES.items()
+            }
             db_cpu = samples_avg(out / "db-cpu.txt", start, end, 1)
             host_cpu = samples_avg(out / "host-cpu.txt", start, end, 1)
+            k6_cpu = samples_avg(out / "host-cpu.txt", start, end, 2)
+            api_us = r["api_cores"] / r["rps"] * 1e6
+            db_us = db_cpu / 100 / r["rps"] * 1e6
             print(
                 f"{workers:>7} {round(max_rate * step / steps):>6} {r['rps']:>7.0f} "
                 f"{r['p50'] * 1000:>6.1f}ms {r['p99'] * 1000:>6.1f}ms "
                 f"{r['k6_p99'] * 1000:>6.0f}ms {r['dropped']:>6.0f} "
-                f"{r['failed'] * 100:>5.1f} {r['api_cores']:>7.2f} {r['pool']:>4.0f} "
-                f"{db_cpu:>7.0f} {host_cpu:>5.0f}"
+                f"{r['failed'] * 100:>5.1f} {r['api_cores']:>7.2f} {api_us:>6.0f} "
+                f"{r['pool']:>4.0f} {db_cpu:>7.0f} {db_us:>5.0f} {k6_cpu:>4.0f} "
+                f"{host_cpu:>5.0f}"
             )
         print()
 

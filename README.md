@@ -119,13 +119,24 @@ them once you know what your machine can take.
 To compare worker counts in one go, `make bench` does everything itself: for each
 of `BENCH_WORKERS` (default `1 2 4 8`) it starts the API, ramps reads up to
 `MAX_READ_RATE`, stops it, and finally prints one row per worker count and step:
-throughput, server and k6 latency, dropped and failed requests, API, Postgres and
-machine CPU. Stop `make api` first, since it needs port 8000. Results are kept in
-`loadtest/results/`.
+throughput, server and k6 latency, dropped and failed requests, and CPU (API,
+Postgres, k6 and the whole machine). Stop `make api` first, since it needs port
+8000. Results are kept in `loadtest/results/`.
 
 ```sh
-make bench BENCH_WORKERS="1 8" MAX_READ_RATE=8000
+make bench BENCH_WORKERS="4 8"   # ramps to 16,000 reads/s in 2,000 steps
 ```
+
+To tell whether a change helped, compare two numbers against a run from before it:
+
+- **The highest step sustained** (p99 well under 100 ms, nothing dropped or
+  failed): capacity.
+- **API µs and DB µs** at a step below saturation: CPU time per request. Latency
+  there is mostly fixed overhead and barely moves, but this does. It shows a
+  change is cheaper even when the ceiling is set by something else.
+
+If `host%` nears 100% (of all cores) before the API breaks, the whole machine is
+the bottleneck, and the ceiling says more about the Mac than the app.
 
 Run `make` to list every target. The Makefile passes its variables through to the
 k6 scripts, whose options are:
@@ -137,7 +148,7 @@ k6 scripts, whose options are:
 | `SKEW` | `1` | `1` reads every URL equally often; higher values concentrate reads on a few hot URLs |
 | `READ_RATE` / `WRITE_RATE` | `1000` / `10` | Requests per second (`steady.js`) |
 | `DURATION` | `5m` | Test length (`steady.js`) |
-| `MAX_READ_RATE`, `STEPS`, `STEP_SECONDS` | `5000`, `10`, `60` | Ramp shape (`ramp.js`) |
+| `MAX_READ_RATE`, `STEPS`, `STEP_SECONDS` | `5000`, `10`, `60` | Ramp shape (`ramp.js`). The Makefile uses `16000`, `8`, `15` |
 
 ### Reading the results
 

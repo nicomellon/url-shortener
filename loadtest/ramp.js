@@ -28,7 +28,9 @@ export const options = {
       timeUnit: "1s",
       stages,
       preAllocatedVUs: 50,
-      maxVUs: Math.max(200, MAX_READ_RATE),
+      // Enough for 16k req/s at 100 ms each (Little's law). Past saturation, more
+      // VUs only pile connections onto the API's accept queue.
+      maxVUs: Math.min(2000, Math.max(200, MAX_READ_RATE)),
     },
     writes: {
       executor: "constant-arrival-rate",
