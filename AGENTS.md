@@ -28,7 +28,7 @@ uv run url-shortener-api                # serve the API on $PORT
 uv run url-shortener-admin init-db      # create database tables
 uv run url-shortener-admin seed-urls --count 1000000  # bulk-insert URLs for load tests
 docker compose up -d db              # start local Postgres
-loadtest/run.sh steady               # run a load test (see README)
+make steady / make ramp / make bench  # load tests (run `make` to list them)
 ```
 
 ## Where things live
@@ -45,8 +45,8 @@ src/url_shortener/
 ├── entrypoints/
 │   ├── fastapi_app.py      #   FastAPI app, lifespan; `url-shortener-api`
 │   ├── api.py              #   Routes: translate HTTP into service calls and views
-│   ├── dependencies.py     #   FastAPI dependencies (DbSession)
-│   ├── metrics.py          #   Prometheus middleware, /metrics, pool collector
+│   ├── dependencies.py     #   FastAPI dependencies (DbSession, ReadEngine)
+│   ├── metrics.py          #   Prometheus middleware, /metrics, pool and process metrics
 │   └── admin.py            #   One-off admin tasks (`url-shortener-admin`)
 └── config.py               # Settings from environment variables, logging setup
 tests/
@@ -54,7 +54,7 @@ tests/
 ├── unit/                   # No I/O
 ├── integration/            # Real database (in-memory SQLite)
 └── e2e/                    # Through HTTP (the `client` fixture)
-loadtest/                   # k6 scripts and runner
+loadtest/                   # k6 scripts, runner, bench.sh and analyze.py
 monitoring/                 # Prometheus config, Grafana provisioning and dashboard
 ```
 
@@ -80,16 +80,26 @@ Work from the inside out, writing tests as you go.
 3. **Writes:** add a function to `service_layer/services.py` taking a `Session` and
    plain arguments. It owns the transaction: call `session.commit()` itself.
    Integration test it with the `sqlite_session_factory` and `mappers` fixtures.
-4. **Reads:** add a query function to `views.py`, taking a `Session`.
-5. **Entrypoint:** add a route to `entrypoints/api.py`, taking `session: DbSession`.
-   Add an e2e test using the `client` fixture.
+4. **Reads:** add a query function to `views.py`, taking the read `Engine` and
+   opening a connection only around its query. Integration test it against an
+   autocommit engine.
+5. **Entrypoint:** add a route to `entrypoints/api.py`, taking `session: DbSession`
+   for writes or `engine: ReadEngine` for reads. Add an e2e test using the
+   `client` fixture.
 
 ## Conventions
 
-- **Sessions:** one per request, from the `DbSession` dependency. FastAPI runs sync
-  routes in a thread pool and sessions aren't thread-safe, so never store a session
-  (or anything holding one) in a module global or on `app.state`. The engine and
-  session factory are safe to share.
+- **Sessions and connections:** a session per request from `DbSession` (writes);
+  views open a connection from `ReadEngine` (reads). FastAPI runs sync routes in a
+  thread pool and neither is thread-safe, so never store one in a module global or
+  on `app.state`. The engines and session factory are safe to share.
+- **Take connections late, release them early:** never check out a connection in a
+  dependency's setup. FastAPI runs the setup and the route on separate thread-pool
+  threads, so under load requests hold every connection while waiting for a thread,
+  and every thread waits for a connection: a deadlock until the pool times out.
+- **Reads are autocommit:** a view's query runs as a single statement, with no
+  BEGIN/ROLLBACK (three round trips become one). If a view runs several queries
+  that must agree with each other, run them in `with engine.begin() as connection:`.
 - **Transactions:** service functions commit explicitly. Prefer letting database
   constraints catch conflicts (catch `IntegrityError`, roll back, raise a domain
   exception) over check-then-write, which races under concurrency.

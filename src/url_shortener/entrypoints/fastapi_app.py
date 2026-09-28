@@ -22,6 +22,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = session_factory.kw["bind"]
     metrics.register_pool_metrics(engine)
     app.state.session_factory = session_factory
+    # Shares the engine's pool: same connections, just used in autocommit mode
+    app.state.read_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
     process_sampler = metrics.ProcessSampler()
     process_sampler.start()
     yield

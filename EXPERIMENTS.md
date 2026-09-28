@@ -37,16 +37,6 @@ flush); reads already use a raw `text()` query in `views.py`.
 - **Tip:** compare at a fixed rate below saturation (CPU usage and p50) and at the
   breaking point (`ramp.js`).
 
-### One round trip per read
-
-Every read runs `BEGIN`, `SELECT`, `ROLLBACK`: the session opens a transaction and
-closing it rolls back. At 5,288 reads/s Postgres counted 5,208 rollbacks/s.
-
-- **Change:** run views on an autocommit connection (or `engine.connect()` with
-  `isolation_level="AUTOCOMMIT"`), so a read is a single statement.
-- **Questions:** How much do Postgres CPU and API CPU per request drop? Does the
-  8-worker ceiling move, given the whole machine was saturated there?
-
 ### Read cache
 
 Short URLs never change once created, so a cache of code → URL never needs
@@ -61,6 +51,52 @@ seconds. Try capping concurrency per worker (uvicorn `limit_concurrency`) so exc
 requests fail fast with 503, and compare goodput and p99.
 
 ## Done
+
+### One round trip per read
+
+Every read ran `BEGIN`, `SELECT`, `ROLLBACK`: the ORM session opened a transaction
+and closing it rolled back.
+
+**Prediction:** one statement instead of three should cut Postgres CPU per read by
+a lot and API CPU somewhat, and move the 8-worker ceiling, since the Mac was
+saturated there.
+
+**Change:** views take the engine and run their query on an autocommit connection
+(`engine.execution_options(isolation_level="AUTOCOMMIT")`, which shares the pool),
+so a read is a single `SELECT`, with no ORM session. Writes keep a transactional
+session.
+
+**Setup:** as for scaling out below (same ramp, 1 and 8 workers).
+
+| | Before | After |
+| --- | --- | --- |
+| One read, measured in a loop | 320 µs | 145 µs |
+| Postgres at ~5,800 reads/s | 5,790 rollbacks/s | 0 rollbacks/s (every `SELECT` counts as a commit) |
+| 1 worker: highest step sustained | 2,000 req/s | 3,000 req/s |
+| 1 worker at 2,000 req/s: API CPU / Postgres CPU | 0.73 cores / 19% | 0.45 cores / 7% |
+| 8 workers: highest step sustained | 6,000 req/s (p99 52 ms) | 8,000 req/s (p99 40 ms), the top of the ramp |
+| 8 workers at 5,000 req/s: API CPU / Postgres CPU | 3.6 cores / 93% | 1.7 cores / 21% |
+| 8 workers at 6,000 req/s: whole Mac | 1,128% (of 1,200%) | 342% |
+
+**Findings:**
+- Better than predicted: Postgres CPU per read fell by about 4×, and API CPU by
+  about 2×, because skipping the session also skips the ORM's bookkeeping. The
+  8-worker ceiling is now above 8,000 req/s, and the Mac has headroom left: the next
+  ramp should go to 10,000+.
+- One worker now tops out at about 3,000 req/s. Past that, k6 hit `dial: i/o
+  timeout` (up to 9.5% of requests): the queue of connections waiting to be
+  accepted overflowed (macOS `kern.ipc.somaxconn` is 128).
+- A single `SELECT` sees one consistent snapshot on its own, so this is safe. A
+  view that runs several queries which must agree needs a transaction again, or it
+  risks read skew (DDIA ch. 7).
+- **Deadlock found on the way:** the first version checked out the read connection
+  in a FastAPI dependency. FastAPI runs a dependency's setup and the route on
+  separate thread-pool threads, so under load (about 3,000 req/s) every connection
+  was held by a request waiting for a thread, and every thread by a request
+  waiting for a connection. The API froze until the pool timed out (1,280
+  `QueuePool` timeouts, 15% failed requests), and it didn't shut down. Fixed by
+  opening the connection inside the view, around the query only. Rule: take
+  connections late, release them early.
 
 ### Scaling out with worker processes (DDIA ch. 1)
 

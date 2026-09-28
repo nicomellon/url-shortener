@@ -70,7 +70,7 @@ tests/
 ├── unit/                # No I/O
 ├── integration/         # Real database (SQLite)
 └── e2e/                 # Through HTTP
-loadtest/                # k6 load tests
+loadtest/                # k6 load tests, bench.sh, analyze.py (see Makefile)
 monitoring/              # Prometheus and Grafana config
 ```
 
@@ -98,25 +98,37 @@ them once you know what your machine can take.
    and skews the results.
 2. Start Postgres and the monitoring stack, then seed:
    ```sh
-   docker compose up -d db prometheus postgres-exporter grafana
-   uv run url-shortener-admin seed-urls --count 10000000   # about 2 minutes
+   make stack-up
+   make seed SEED_COUNT=10000000   # about 2 minutes
    ```
-3. Run the API on your machine, without access logs. `WEB_CONCURRENCY` sets the
-   number of worker processes (one process tops out around 2,000 reads/s):
+3. In one terminal, run the API. `WORKERS` sets the number of worker processes
+   (one process tops out around 2,000 reads/s):
    ```sh
-   ACCESS_LOG=false WEB_CONCURRENCY=4 uv run url-shortener-api
+   make api WORKERS=4
    ```
    Each worker has its own connection pool, so keep
-   `WEB_CONCURRENCY × (DB_POOL_SIZE + DB_MAX_OVERFLOW)` below Postgres'
-   `max_connections` (100). For 8 workers, use `DB_MAX_OVERFLOW=5`.
-4. Open the dashboard at http://localhost:3000 and run a test:
+   `WORKERS × (POOL_SIZE + MAX_OVERFLOW)` below Postgres' `max_connections` (100).
+   The Makefile defaults (5 + 5) allow up to 8 workers.
+4. In another, open the dashboard (`make dashboard`) and run a test:
    ```sh
-   loadtest/run.sh steady -e SEED_COUNT=10000000                      # 1,000 reads/s, 10 writes/s, 5 minutes
-   loadtest/run.sh steady -e SEED_COUNT=10000000 -e READ_RATE=10000 -e WRITE_RATE=100
-   loadtest/run.sh ramp   -e SEED_COUNT=10000000 -e MAX_READ_RATE=5000
+   make steady SEED_COUNT=10000000                                  # 1,000 reads/s, 10 writes/s, 5 minutes
+   make steady SEED_COUNT=10000000 READ_RATE=10000 WRITE_RATE=100   # the full DDIA target
+   make ramp   SEED_COUNT=10000000 MAX_READ_RATE=5000               # find the breaking point
    ```
 
-Test options, passed as `-e NAME=value`:
+To compare worker counts in one go, `make bench` does everything itself: for each
+of `BENCH_WORKERS` (default `1 2 4 8`) it starts the API, ramps reads up to
+`MAX_READ_RATE`, stops it, and finally prints one row per worker count and step:
+throughput, server and k6 latency, dropped and failed requests, API, Postgres and
+machine CPU. Stop `make api` first, since it needs port 8000. Results are kept in
+`loadtest/results/`.
+
+```sh
+make bench BENCH_WORKERS="1 8" MAX_READ_RATE=8000
+```
+
+Run `make` to list every target. The Makefile passes its variables through to the
+k6 scripts, whose options are:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
