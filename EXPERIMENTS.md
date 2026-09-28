@@ -79,11 +79,19 @@ injection, the metrics middleware, the thread-pool hop for sync routes, SQLAlche
   language lowers the cost per request (a constant factor), while scaling out
   changes how capacity grows with machines (DDIA ch. 1).
 
-### Read cache
+### Shared cache (Redis) vs. local cache
 
-Short URLs never change once created, so a cache of code → URL never needs
-invalidating. Try an in-process LRU cache first, and compare hit rates with
-`SKEW=1` (uniform) and `SKEW=3` (hot keys).
+The read cache (see Done) is per process. A shared cache like Redis trades a
+network round trip per lookup for one warm copy shared by every worker and machine.
+That copy survives deploys, and memory isn't duplicated.
+
+- **Change:** a Redis-backed cache behind the same `get`/`put` interface, then an
+  in-process cache in front of Redis (two tiers).
+- **Questions:** Is a Redis hit cheaper than the Postgres primary-key lookup it
+  replaces, given the table already fits in Postgres' memory? How much does the hit
+  rate improve with one cache instead of one per worker? What happens right after
+  a deploy (cold caches)? What does the API do when Redis is down: fall back to
+  Postgres, or fail? Is it one more single point of failure?
 
 ### Load shedding
 
@@ -93,6 +101,68 @@ seconds. Try capping concurrency per worker (uvicorn `limit_concurrency`) so exc
 requests fail fast with 503, and compare goodput and p99.
 
 ## Done
+
+### Read cache
+
+Short URLs never change once created and are never deleted, so a cache of code →
+URL never needs invalidating, and each worker can keep its own.
+
+**Change:** `adapters/cache.py`, an LRU cache per worker (`READ_CACHE_SIZE`,
+default 100,000 URLs, about 30 MB). `views.get_url` checks it before querying, and
+caches only URLs it found: a 404 isn't cached, since the code may be created a
+moment later.
+
+**Why in-process rather than Redis:** Postgres isn't the bottleneck (40 µs of CPU
+per read against 314 µs in the API), and the table is already in its memory. A
+Redis hit still costs a network round trip and client work, while a local hit
+costs about 1 µs. Redis is a follow-up experiment (see To do).
+
+**Predictions:**
+- **Hit rate:** `lib.js` picks index N·u^SKEW, so the k most popular URLs get
+  (k/N)^(1/SKEW) of the reads. With 100,000 entries per worker and 1M URLs, the
+  best any cache can do is 10% with `SKEW=1` and 46% with `SKEW=3`. LRU does a
+  bit worse, and each of the 8 workers warms its own cache.
+- **Cost:** Postgres µs per read falls with the hit rate. API µs falls much less,
+  because a hit still does the HTTP, routing and middleware work.
+- **Ceiling:** with `SKEW=3` it rises modestly, as CPU Postgres no longer uses goes
+  to the API. With `SKEW=1` there's little change.
+- Without the cache, skew alone barely matters: the whole table is in memory.
+
+**Setup:** as the Baseline, 8 workers, with the cache off and on, for uniform
+(`SKEW=1`) and hot (`SKEW=3`) keys. All four runs were back to back, so they're
+compared with each other rather than with the Baseline (see the last finding).
+Hit rates are for each step; they rise through the run as caches warm.
+
+| 8 workers | Cache off, `SKEW=1` | Cache on, `SKEW=1` | Cache off, `SKEW=3` | Cache on, `SKEW=3` |
+| --- | --- | --- | --- | --- |
+| Hit rate at 4,000 → 16,000 req/s | | 2% → 10% | | 13% → 32% |
+| API / DB µs per read at 6,000 req/s | 381 / 60 | 360 / 53 | 389 / 62 | 357 / 45 |
+| At 8,000 req/s: server p99, Postgres CPU, whole Mac | 21 ms, 265%, 845% | 12 ms, 269%, 726% | 63 ms, 271%, 938% | **3 ms, 35%, 495%** |
+| At 10,000 req/s: throughput, server p99 | 8,855, 392 ms | 8,612, 418 ms | 9,451, 401 ms | **9,925, 116 ms** |
+| Peak throughput | 9,346 | 9,135 | 9,451 | **10,669** |
+
+**Findings:**
+- **Uniform keys: no gain.** A 100,000-entry cache over 1M equally popular URLs
+  can't hit more than 10%, and it got there only at the end of the run.
+- **Hot keys: a modest hit rate, a large effect near the limit.** At 8,000 req/s
+  with the cache off, Postgres CPU jumped from 37% (at 6,000) to 271%, and the
+  whole Mac to 938%. Everything competed for CPU and got slower together. A 21% hit
+  rate kept the system below that knee: Postgres at 35%, p99 at 3 ms instead of
+  63 ms. Near saturation, response time grows much faster than load (DDIA ch. 1's
+  queueing), so taking a small share of the load off has an outsized effect.
+  The peak rose 13% (9,451 → 10,669).
+- **Hit rates were below the prediction** (32% at the end, against at most 46%),
+  because the caches never warmed up. Each worker only sees an eighth of the
+  reads, so in a 3-minute run it saw about 175,000 reads, barely more than the
+  cache holds. This is the per-process cache's weakness: 8 cold copies to fill,
+  and they're emptied again on every deploy. A shared cache fills once (see
+  "Shared cache (Redis) vs. local cache").
+- **API µs per read barely moved** (357 vs 389 at 6,000 with hot keys), as
+  predicted: a hit still does the HTTP, routing and middleware work. The
+  difference is within the noise between runs.
+- **Runs vary by 10–20%.** Today's cache-off uniform run peaked at 9,346 req/s,
+  against 9,925 for the Baseline earlier in the day, with the same code and
+  settings. The Mac's background load changes, so compare runs made back to back.
 
 ### One round trip per read
 

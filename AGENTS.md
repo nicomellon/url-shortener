@@ -40,12 +40,13 @@ src/url_shortener/
 ├── service_layer/
 │   └── services.py         # Use cases that change state: one function each, taking a Session
 ├── adapters/
-│   └── orm.py              # Tables, imperative mappings, create_tables, session factory
+│   ├── orm.py              # Tables, imperative mappings, create_tables, session factory
+│   └── cache.py            # In-process LRU cache for reads
 ├── views.py                # Read-only queries that bypass the domain (CQRS)
 ├── entrypoints/
 │   ├── fastapi_app.py      #   FastAPI app, lifespan; `url-shortener-api`
 │   ├── api.py              #   Routes: translate HTTP into service calls and views
-│   ├── dependencies.py     #   FastAPI dependencies (DbSession, ReadEngine)
+│   ├── dependencies.py     #   FastAPI dependencies (DbSession, ReadEngine, ReadCache)
 │   ├── metrics.py          #   Prometheus middleware, /metrics, pool and process metrics
 │   └── admin.py            #   One-off admin tasks (`url-shortener-admin`)
 └── config.py               # Settings from environment variables, logging setup
@@ -84,8 +85,8 @@ Work from the inside out, writing tests as you go.
    opening a connection only around its query. Integration test it against an
    autocommit engine.
 5. **Entrypoint:** add a route to `entrypoints/api.py`, taking `session: DbSession`
-   for writes or `engine: ReadEngine` for reads. Add an e2e test using the
-   `client` fixture.
+   for writes or `engine: ReadEngine` for reads (plus `read_cache: ReadCache` for
+   cached reads). Add an e2e test using the `client` fixture.
 
 ## Conventions
 
@@ -112,6 +113,10 @@ Work from the inside out, writing tests as you go.
   hostnames). Only settings with safe defaults for every environment get a default.
 - **Logging:** use `logger = logging.getLogger(__name__)` at module level. Never
   write log files, and never configure logging outside `config.configure_logging`.
+- **Caches:** an in-process cache (`adapters/cache.py`) is only for data that never
+  changes, like short URLs: each worker has its own copy, and nothing tells the
+  others when an entry changes. Never cache "not found". Anything mutable needs
+  invalidation or a shared cache.
 - **State:** processes are stateless. Store anything that must survive a request in
   a backing service (the database), not in memory or on local disk.
 - **Admin tasks:** add them as subcommands in `entrypoints/admin.py` rather than

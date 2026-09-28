@@ -4,7 +4,7 @@ from pydantic import BaseModel, HttpUrl
 
 from url_shortener import views
 from url_shortener.domain import model
-from url_shortener.entrypoints.dependencies import DbSession, ReadEngine
+from url_shortener.entrypoints.dependencies import DbSession, ReadCache, ReadEngine
 from url_shortener.service_layer import services
 
 router = APIRouter(tags=["urls"])
@@ -46,8 +46,10 @@ def create_short_url(
 
 # 302 rather than 301, so browsers don't cache the redirect forever
 @router.get("/{short_code}", status_code=302, response_class=RedirectResponse)
-def redirect(short_code: str, engine: ReadEngine) -> RedirectResponse:
-    url = views.get_url(engine, short_code)
+def redirect(
+    short_code: str, engine: ReadEngine, read_cache: ReadCache
+) -> RedirectResponse:
+    url = views.get_url(engine, read_cache, short_code)
     if url is None:
         raise HTTPException(status_code=404, detail="Short URL not found")
     return RedirectResponse(url, status_code=302)

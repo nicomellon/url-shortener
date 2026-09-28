@@ -7,6 +7,8 @@ from fastapi import Depends, Request
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from url_shortener.adapters import cache
+
 
 def get_session(request: Request) -> Iterator[Session]:
     # A session per request: sessions aren't thread-safe, and FastAPI runs sync
@@ -22,5 +24,10 @@ async def get_read_engine(request: Request) -> Engine:
     return request.app.state.read_engine
 
 
+async def get_read_cache(request: Request) -> cache.LRUCache:
+    return request.app.state.read_cache
+
+
 DbSession = Annotated[Session, Depends(get_session)]
 ReadEngine = Annotated[Engine, Depends(get_read_engine)]
+ReadCache = Annotated[cache.LRUCache, Depends(get_read_cache)]

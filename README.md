@@ -193,6 +193,7 @@ All configuration comes from environment variables. Locally they are read from
 | `WEB_CONCURRENCY` | no | `1` | API worker processes |
 | `DB_POOL_SIZE` | no | `5` | Database connections each worker keeps open |
 | `DB_MAX_OVERFLOW` | no | `10` | Extra connections each worker may open under load |
+| `READ_CACHE_SIZE` | no | `100000` | URLs each worker caches in memory (about 30 MB per 100,000); `0` turns the cache off |
 | `DB_PORT` | no | `5432` | Host port for the local Postgres container (compose only) |
 
 ## Twelve-factor

@@ -33,6 +33,9 @@ QUERIES = {
     " / sum(rate(k6_http_reqs_total{TESTID}[10s])) or vector(0)",
     "api_cores": "sum(rate(app_process_cpu_seconds[10s]))",
     "pool": "sum(db_pool_checked_out)",
+    # NaN (shown as nan) when the cache is off: nothing is looked up
+    "hit": 'sum(rate(read_cache_lookups_total{result="hit"}[10s])) '
+    "/ sum(rate(read_cache_lookups_total[10s]))",
 }
 
 
@@ -60,6 +63,7 @@ def main(out: Path) -> None:
     params = dict(line.split("=") for line in (out / "params").read_text().split())
     max_rate, steps = int(params["MAX_READ_RATE"]), int(params["STEPS"])
     hold = int(params["STEP_SECONDS"])
+    print(" ".join(f"{k}={v}" for k, v in params.items()))
 
     # API and DB µs/req: CPU time per request, which shows an improvement even
     # below saturation, where latency barely moves. k6%: the load generator's
@@ -67,7 +71,7 @@ def main(out: Path) -> None:
     print(
         f"{'workers':>7} {'target':>6} {'reads/s':>7} {'p50':>8} {'p99':>8} "
         f"{'k6 p99':>8} {'drop/s':>6} {'fail%':>5} {'API cpu':>7} {'API µs':>6} "
-        f"{'pool':>4} {'DB cpu%':>7} {'DB µs':>5} {'k6%':>4} {'host%':>5}"
+        f"{'pool':>4} {'DB cpu%':>7} {'DB µs':>5} {'hit%':>5} {'k6%':>4} {'host%':>5}"
     )
     for line in (out / "starts.txt").read_text().splitlines():
         workers, started = line.split()
@@ -86,13 +90,14 @@ def main(out: Path) -> None:
             k6_cpu = samples_avg(out / "host-cpu.txt", start, end, 2)
             api_us = r["api_cores"] / r["rps"] * 1e6
             db_us = db_cpu / 100 / r["rps"] * 1e6
+            hit = r["hit"] * 100
             print(
                 f"{workers:>7} {round(max_rate * step / steps):>6} {r['rps']:>7.0f} "
                 f"{r['p50'] * 1000:>6.1f}ms {r['p99'] * 1000:>6.1f}ms "
                 f"{r['k6_p99'] * 1000:>6.0f}ms {r['dropped']:>6.0f} "
                 f"{r['failed'] * 100:>5.1f} {r['api_cores']:>7.2f} {api_us:>6.0f} "
-                f"{r['pool']:>4.0f} {db_cpu:>7.0f} {db_us:>5.0f} {k6_cpu:>4.0f} "
-                f"{host_cpu:>5.0f}"
+                f"{r['pool']:>4.0f} {db_cpu:>7.0f} {db_us:>5.0f} {hit:>5.0f} "
+                f"{k6_cpu:>4.0f} {host_cpu:>5.0f}"
             )
         print()
 

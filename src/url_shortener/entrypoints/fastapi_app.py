@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from sqlalchemy.orm import clear_mappers
 
 from url_shortener import config
-from url_shortener.adapters import orm
+from url_shortener.adapters import cache, orm
 from url_shortener.entrypoints import api, metrics
 
 
@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.session_factory = session_factory
     # Shares the engine's pool: same connections, just used in autocommit mode
     app.state.read_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+    app.state.read_cache = cache.LRUCache(config.get_settings().read_cache_size)
     process_sampler = metrics.ProcessSampler()
     process_sampler.start()
     yield

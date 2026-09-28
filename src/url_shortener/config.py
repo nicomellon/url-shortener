@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     web_concurrency: int = 1
     db_pool_size: int = 5
     db_max_overflow: int = 10
+    # URLs each worker keeps in memory (about 300 bytes each); 0 turns it off
+    read_cache_size: int = 100_000
     # Set by fastapi_app.main when running several workers, not by hand
     prometheus_multiproc_dir: str | None = None
 

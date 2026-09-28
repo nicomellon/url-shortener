@@ -13,6 +13,8 @@ SKEW ?= 1
 WORKERS ?= 1
 POOL_SIZE ?= 5
 MAX_OVERFLOW ?= 5
+# URLs each worker caches in memory; 0 turns the cache off
+READ_CACHE_SIZE ?= 100000
 
 # steady.js
 READ_RATE ?= 1000
@@ -26,7 +28,8 @@ STEP_SECONDS ?= 15
 BENCH_WORKERS ?= 1 2 4 8
 
 K6_ENV = -e SEED_COUNT=$(SEED_COUNT) -e SKEW=$(SKEW)
-POOL_ENV = DB_POOL_SIZE=$(POOL_SIZE) DB_MAX_OVERFLOW=$(MAX_OVERFLOW)
+POOL_ENV = DB_POOL_SIZE=$(POOL_SIZE) DB_MAX_OVERFLOW=$(MAX_OVERFLOW) \
+	READ_CACHE_SIZE=$(READ_CACHE_SIZE)
 
 .DEFAULT_GOAL := help
 .PHONY: help stack-up stack-down seed api steady ramp bench dashboard
@@ -57,7 +60,7 @@ ramp: ## Step reads up to MAX_READ_RATE to find the breaking point
 
 bench: ## Ramp each of BENCH_WORKERS in turn and summarize (starts the API itself)
 	$(POOL_ENV) MAX_READ_RATE=$(MAX_READ_RATE) STEPS=$(STEPS) \
-		STEP_SECONDS=$(STEP_SECONDS) SEED_COUNT=$(SEED_COUNT) \
+		STEP_SECONDS=$(STEP_SECONDS) SEED_COUNT=$(SEED_COUNT) SKEW=$(SKEW) \
 		loadtest/bench.sh $(BENCH_WORKERS)
 
 dashboard: ## Open the Grafana dashboard

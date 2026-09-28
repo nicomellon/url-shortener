@@ -14,10 +14,20 @@ connection waiting for a thread, while every thread waits for a connection.
 
 from sqlalchemy import Engine, text
 
+from url_shortener.adapters import cache
 
-def get_url(engine: Engine, short_code: str) -> str | None:
+
+def get_url(engine: Engine, read_cache: cache.LRUCache, short_code: str) -> str | None:
+    # Short URLs never change and are never deleted, so a cached URL can't go
+    # stale. Unknown codes aren't cached: one may be created a moment later.
+    url = read_cache.get(short_code)
+    if url is not None:
+        return url
     with engine.connect() as connection:
-        return connection.execute(
+        url = connection.execute(
             text("SELECT url FROM short_urls WHERE short_code = :short_code"),
             dict(short_code=short_code),
         ).scalar_one_or_none()
+    if url is not None:
+        read_cache.put(short_code, url)
+    return url

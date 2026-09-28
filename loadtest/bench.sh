@@ -23,9 +23,10 @@ export ACCESS_LOG=false
 export DB_POOL_SIZE=${DB_POOL_SIZE:-5} DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-5}
 export MAX_READ_RATE=${MAX_READ_RATE:-16000} STEPS=${STEPS:-8} STEP_SECONDS=${STEP_SECONDS:-15}
 WRITE_RATE=${WRITE_RATE:-100}
-SEED_COUNT=${SEED_COUNT:-1000000}
-printf 'MAX_READ_RATE=%s\nSTEPS=%s\nSTEP_SECONDS=%s\n' \
-  "$MAX_READ_RATE" "$STEPS" "$STEP_SECONDS" > "$out/params"
+SEED_COUNT=${SEED_COUNT:-1000000} SKEW=${SKEW:-1}
+export READ_CACHE_SIZE=${READ_CACHE_SIZE:-100000}
+printf 'MAX_READ_RATE=%s\nSTEPS=%s\nSTEP_SECONDS=%s\nSKEW=%s\nREAD_CACHE_SIZE=%s\n' \
+  "$MAX_READ_RATE" "$STEPS" "$STEP_SECONDS" "$SKEW" "$READ_CACHE_SIZE" > "$out/params"
 
 # Postgres CPU (inside the Docker VM) and this machine's CPU by process group,
 # sampled every few seconds, for analyze.py
@@ -65,7 +66,7 @@ for w in "${workers[@]}"; do
   loadtest/run.sh ramp --tag testid="$(basename "$out")-$w" \
     -e MAX_READ_RATE="$MAX_READ_RATE" -e STEPS="$STEPS" \
     -e STEP_SECONDS="$STEP_SECONDS" -e WRITE_RATE="$WRITE_RATE" \
-    -e SEED_COUNT="$SEED_COUNT" > "$out/k6-$w.txt" 2>&1
+    -e SEED_COUNT="$SEED_COUNT" -e SKEW="$SKEW" > "$out/k6-$w.txt" 2>&1
 
   kill -TERM $api
   for _ in $(seq 20); do kill -0 $api 2>/dev/null || break; sleep 1; done
